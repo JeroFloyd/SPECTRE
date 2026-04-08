@@ -26,25 +26,35 @@ def grade_episode(
     target_length = final_obs["target_length"]
     optimal       = OPTIMAL_STEPS.get(task, target_length)
 
-    success       = progress >= target_length
+    success = progress >= target_length
+    
     efficiency    = round(optimal / max(steps_taken, 1), 4)
     compression   = final_obs.get("compression_ratio", 0.0)
     quality_score = pipeline_summary.get("quality_score", 0.0)
+    # Final success check (after quality is known)
+    success = (
+        progress >= target_length and
+        quality_score >= PASSING_QUALITY
+    )
     output_hash   = pipeline_summary.get("output_hash", "")
     output_path   = pipeline_summary.get("output_path", "")
 
     output_verified = False
     if output_path:
         p = Path(output_path)
-        output_verified = (p.exists() and p.stat().st_size > 0
-                           and quality_score >= PASSING_QUALITY)
+        output_verified = (
+            p.exists()
+            and p.stat().st_size > 0
+            and quality_score >= PASSING_QUALITY
+            and pipeline_summary.get("rows_exported", 0) > 0
+        )
 
     if not success:
-        verdict = "FAIL — task not completed"
+        verdict = "FAIL — incomplete or low-quality output"
     elif efficiency < PASSING_EFFICIENCY:
-        verdict = "PASS (slow) — completed but far from optimal"
+        verdict = "PASS (slow) — completed but inefficient"
     elif compression > 1.0:
-        verdict = "PASS (self-programmed) — used tool composition efficiently"
+        verdict = "PASS (self-programmed) — efficient tool composition"
     else:
         verdict = "PASS — completed without self-programming"
 
@@ -52,12 +62,15 @@ def grade_episode(
     tool_uses    = [s for s in step_log if s["action"].get("type") == "use_tool"]
     errors       = [s for s in step_log if s.get("info", {}).get("error")]
 
+    # Unified reward scaling
     if task == "hard":
-        capped_reward = min(0.99, total_reward)
+        cap = 0.99
     elif task == "medium":
-        capped_reward = min(0.95, total_reward)
-    else:  
-        capped_reward = min(0.85, total_reward + 0.05)
+        cap = 0.95
+    else:
+        cap = 0.85
+
+    capped_reward = min(cap, total_reward)
 
     return {
         "session_id":        final_obs.get("session_id", ""),
@@ -125,14 +138,7 @@ def run_and_grade(
         print(f"  Revenue  : ${ps['revenue_total']:,.2f}")
         print(f"  Quality  : {ps['quality_score']:.3f}")
         print(f"  Exported : {ps['rows_exported']} rows → {ps['output_path']}")
-        if task == "hard":
-            capped_reward = min(0.99, total_reward)
-        elif task == "medium":
-            capped_reward = min(0.95, total_reward)
-        else:
-            capped_reward = min(0.90, total_reward)
-
-        print(f"  Reward   : {capped_reward:.4f}")
+        
 
     report = grade_episode(
         task             = task,
@@ -141,6 +147,8 @@ def run_and_grade(
         total_reward     = total_reward,
         pipeline_summary = env._pipeline.summary(),
     )
+    if verbose:
+        print(f"  Reward   : {report['total_reward']:.4f}")
 
     if verbose:
         print(f"\n  Verdict  : {report['verdict']}")
