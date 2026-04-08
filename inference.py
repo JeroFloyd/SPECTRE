@@ -104,19 +104,24 @@ def get_llm_action(obs: dict) -> dict | None:
         return None
 
 
+def _clamp(r: float) -> float:
+    """Ensure reward is strictly between 0 and 1 (never 0.0 or 1.0)."""
+    return round(min(0.99, max(0.01, r)), 4)
+
+
 def log_start(task: str, model: str):
     print(f"[START] task={task} env=spectre model={model}", flush=True)
 
 def log_step(step: int, action: dict, reward: float, done: bool, error: str | None):
     print(
         f"[STEP] step={step} action={json.dumps(action)} "
-        f"reward={reward:.2f} done={str(done).lower()} "
+        f"reward={_clamp(reward):.2f} done={str(done).lower()} "
         f"error={error or 'null'}",
         flush=True,
     )
 
 def log_end(success: bool, steps: int, rewards: list[float]):
-    rewards_str = ",".join(f"{r:.2f}" for r in rewards)
+    rewards_str = ",".join(f"{_clamp(r):.2f}" for r in rewards)
     print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}",
           flush=True)
 
@@ -146,7 +151,7 @@ def run_task(task_name: str):
                 log_step(steps, action, reward, done, info.get("error"))
 
             except Exception as exc:
-                log_step(steps, {"error": str(exc)}, 0.0, True, str(exc))
+                log_step(steps, {"error": str(exc)}, 0.01, True, str(exc))
                 done = True
 
         success = obs["progress"] >= obs["target_length"]
