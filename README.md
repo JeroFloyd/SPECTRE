@@ -12,7 +12,7 @@ S.P.E.C.T.R.E is a reinforcement learning environment built to push AI agents be
 
 Most AI agents are executors—they follow instructions step-by-step, wasting compute and API tokens on repetitive loops.
 
-SPECTRE transforms the agent from an executor into an Architect. Built on the OpenEnv framework, SPECTRE is a world-first RL environment that allows agents to perform Hierarchical Action Synthesis. Instead of just doing the work, the agent analyzes the task, builds its own "macros" (tools), and then recursively nests those tools to collapse complex 10-step data pipelines into a single, elegant execution.
+SPECTRE transforms the agent from an executor into an Architect. Built on the OpenEnv framework, SPECTRE is a novel RL environment that allows agents to perform Hierarchical Action Synthesis. Instead of just doing the work, the agent analyzes the task, builds its own "macros" (tools), and then recursively nests those tools to collapse complex 10-step data pipelines into a single, elegant execution.
 
 ---
 
