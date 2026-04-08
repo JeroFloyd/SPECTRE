@@ -154,7 +154,9 @@ def run_and_grade(
         ps = env._pipeline.summary()
         print(f"\n  Progress : {obs['progress']} / {obs['target_length']}")
         print(f"  Steps    : {obs['step_count']}  (optimal: {OPTIMAL_STEPS.get(task, '?')})")
-        print(f"  Compress : {obs['compression_ratio']:.3f}")
+        comp = obs['compression_ratio']
+        comp = min(0.999, comp)  
+        print(f"Compress : {comp:.4f}")
         print(f"  Revenue  : ${ps['revenue_total']:,.2f}")
         print(f"  Quality  : {ps['quality_score']:.3f}")
         print(f"  Exported : {ps['rows_exported']} rows → {ps['output_path']}")
