@@ -131,7 +131,7 @@ def grade(session_id: str = Path(...)):
         task             = env.task_name,
         step_log         = env._step_log,
         final_obs        = obs,
-        total_reward     = sum(s["reward"] for s in env._step_log),
+        total_reward     = sum(max(0.01, min(0.99, s["reward"])) for s in env._step_log),
         pipeline_summary = env._pipeline.summary(),
     )
     return report
@@ -156,11 +156,3 @@ def delete_session(session_id: str = Path(...)):
         raise HTTPException(404, f"Session '{session_id}' not found.")
     del _sessions[session_id]
     return {"deleted": session_id}
-
-def main():
-    import uvicorn
-    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
-
-
-if __name__ == "__main__":
-    main()
