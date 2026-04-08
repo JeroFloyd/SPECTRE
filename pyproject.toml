@@ -1,0 +1,18 @@
+[project]
+name = "spectre-env"
+version = "0.1.0"
+description = "S.P.E.C.T.R.E — Self-Programming Environment for Complex Task Reconstruction & Evolution"
+authors = [
+    { name = "JeroFloyd" }
+]
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "openai",
+    "pandas"
+]
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
