@@ -28,11 +28,15 @@ def grade_episode(
 
     success = progress >= target_length
 
-    efficiency    = round(optimal / max(steps_taken, 1), 4)
+    efficiency = optimal / max(steps_taken, 1)
+    efficiency = max(1e-6, min(0.9999, efficiency))
+    efficiency = round(efficiency, 4)
     compression   = final_obs.get("compression_ratio", 0.0)
     quality_score = pipeline_summary.get("quality_score", 0.0)
 
-    # Final success check (after quality is known)
+    EPS = 1e-6
+    quality_score = max(EPS, min(1.0 - EPS, quality_score))
+
     success = (
         progress >= target_length and
         quality_score >= PASSING_QUALITY
