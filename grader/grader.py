@@ -27,10 +27,11 @@ def grade_episode(
     optimal       = OPTIMAL_STEPS.get(task, target_length)
 
     success = progress >= target_length
-    
+
     efficiency    = round(optimal / max(steps_taken, 1), 4)
     compression   = final_obs.get("compression_ratio", 0.0)
     quality_score = pipeline_summary.get("quality_score", 0.0)
+
     # Final success check (after quality is known)
     success = (
         progress >= target_length and
@@ -62,7 +63,7 @@ def grade_episode(
     tool_uses    = [s for s in step_log if s["action"].get("type") == "use_tool"]
     errors       = [s for s in step_log if s.get("info", {}).get("error")]
 
-    # Unified reward scaling
+    # Unified reward scaling — strictly within (0, 1), never 0.0 or 1.0
     if task == "hard":
         cap = 0.99
     elif task == "medium":
@@ -70,7 +71,8 @@ def grade_episode(
     else:
         cap = 0.85
 
-    capped_reward = min(cap, total_reward)
+    # Clamp strictly between 0.01 and cap (never exactly 0.0 or 1.0)
+    capped_reward = round(min(cap, max(0.01, total_reward)), 4)
 
     return {
         "session_id":        final_obs.get("session_id", ""),
@@ -81,7 +83,7 @@ def grade_episode(
         "efficiency_ratio":  efficiency,
         "compression_ratio": compression,
         "quality_score":     round(quality_score, 4),
-        "total_reward":      round(capped_reward, 4),
+        "total_reward":      capped_reward,
         "output_verified":   output_verified,
         "output_hash":       output_hash,
         "verdict":           verdict,
@@ -105,7 +107,7 @@ def run_and_grade(
     agent          = None,
     verbose: bool = True,
 ) -> dict:
-    from env.environment    import SpectreEnv
+    from env.environment      import SpectreEnv
     from agent.baseline_agent import BaselineAgent
 
     if agent is None:
@@ -138,7 +140,6 @@ def run_and_grade(
         print(f"  Revenue  : ${ps['revenue_total']:,.2f}")
         print(f"  Quality  : {ps['quality_score']:.3f}")
         print(f"  Exported : {ps['rows_exported']} rows → {ps['output_path']}")
-        
 
     report = grade_episode(
         task             = task,
