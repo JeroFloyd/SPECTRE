@@ -45,7 +45,13 @@ class SpectreEnv:
         remaining = len(self.target_sequence) - self.progress
         next_op   = (self.target_sequence[self.progress]
                      if self.progress < len(self.target_sequence) else None)
-        compression = round(self.progress / max(self.step_count, 1), 3)
+        EPS = 1e-4
+
+        compression = self.progress / max(self.step_count, 1)
+
+        compression = max(EPS, min(0.9999, compression))
+
+        compression = float(f"{compression:.4f}")
 
         return {
             "task":                 self.task_name,
