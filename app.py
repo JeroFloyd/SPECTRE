@@ -155,3 +155,12 @@ def delete_session(session_id: str = Path(...)):
         raise HTTPException(404, f"Session '{session_id}' not found.")
     del _sessions[session_id]
     return {"deleted": session_id}
+
+
+def main():
+    import uvicorn
+    uvicorn.run("server.app:app", host="0.0.0.0", port=7860)
+
+
+if __name__ == "__main__":
+    main()
