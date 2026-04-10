@@ -22,7 +22,7 @@ app = FastAPI(
         "OpenEnv-compliant RL environment where AI agents complete real-world "
         "data processing pipelines and learn to self-program reusable macros."
     ),
-    version  = "2.0.0",
+    version  = "1.0.0",
     docs_url = "/docs",
     redoc_url= "/redoc",
 )
@@ -62,13 +62,12 @@ class ActionRequest(BaseModel):
 
 @app.get("/healthz", tags=["meta"])
 def healthz():
-    return {"status": "ok", "version": "2.0.0", "active_sessions": len(_sessions)}
+    return {"status": "ok", "version": "1.0.0", "active_sessions": len(_sessions)}
 
 @app.get("/", tags=["meta"])
 def root():
     return {
         "name":    "S.P.E.C.T.R.E",
-        "version": "2.0.0",
         "tasks":   ["easy", "medium", "hard"],
         "endpoints": {
             "POST /reset":              "Start new episode → returns session_id",
@@ -96,7 +95,7 @@ def reset(body: ResetRequest = None):
     return {
         "session_id":  session_id,
         "observation": obs,
-        "reward":      0.0,
+        "reward":      1e-4,
         "done":        False,
         "info":        {},
     }
