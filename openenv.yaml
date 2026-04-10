@@ -58,7 +58,7 @@ tasks:
 
   - name: medium
     description: >
-      Full parse → validate → transform ETL cycle repeated twice. 6-step target.
+      Full parse -> validate -> transform ETL cycle repeated twice. 6-step target.
       Optimal agent builds an etl_batch tool and reuses it (3 steps total).
     target_sequence:
       - parse_data
@@ -93,11 +93,11 @@ reward:
   description: >
     step_penalty: -0.01 per step (efficiency pressure).
     progress_bonus: +0.05 per primitive correctly completed.
-    completion_bonus: up to 1.0 based on efficiency (1 - steps/max_steps).
+    completion_bonus: up to 0.99 based on efficiency.
     quality_bonus: +0.15 if output quality >= 0.90, +0.07 if >= 0.75.
     compression_bonus: +0.10 if agent used self-programming and step_count < progress.
-    Each step reward is clipped to [0.0, 1.0].
+    Each step reward is clipped to strictly within (0.01, 0.99).
   range:
-    - 0.0001
-    - 0.9999
+    - 0.01
+    - 0.99
   partial_progress: true
