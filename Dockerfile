@@ -2,14 +2,18 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-COPY . .
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-RUN pip install --no-cache-dir \
-    fastapi \
-    uvicorn \
-    pydantic \
-    openai \
-    pandas
+COPY app.py .
+COPY inference.py .
+COPY openenv.yaml .
+COPY env/ ./env/
+COPY grader/ ./grader/
+COPY agent/ ./agent/
+COPY data/raw/ ./data/raw/
+
+RUN mkdir -p data/processed
 
 EXPOSE 7860
 
