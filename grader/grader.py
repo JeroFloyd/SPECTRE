@@ -15,7 +15,6 @@ PASSING_EFFICIENCY = 0.50
 
 
 def _safe(v: float) -> float:
-    """Clamp any float to strictly (0.01, 0.99) — never 0.0 or 1.0."""
     v = float(v)
     if v <= 0.0:
         return 0.01
@@ -81,7 +80,6 @@ def grade_episode(
     score = _safe(min(cap, total_reward))
 
     return {
-        # ✅ Only safe floats — no raw integers that could be outside (0,1)
         "session_id":        final_obs.get("session_id", ""),
         "task":              task,
         "success":           success,
