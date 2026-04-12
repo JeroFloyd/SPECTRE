@@ -5,12 +5,25 @@ if TYPE_CHECKING:
     from env.pipeline import PipelineState
 
 def _safe(v: float) -> float:
-    v = float(v)
-    if v <= 0.0:
+    """Ensure value is STRICTLY between 0 and 1 (exclusive)."""
+    try:
+        v = float(v)
+    except (TypeError, ValueError):
+        return 0.5  # Safe default
+    
+    if v <= 0.0 or not (0 < v < float('inf')):
         return 0.01
     if v >= 1.0:
         return 0.99
-    return min(0.99, max(0.01, v))
+    
+    clamped = max(0.01, min(0.99, v))
+    
+    if clamped <= 0.0:
+        return 0.01
+    if clamped >= 1.0:
+        return 0.99
+    
+    return clamped
 
 def compute_reward(step_count, max_steps, done, progress, target_length, prev_progress, pipeline, custom_tools):
     step_penalty = -0.01
