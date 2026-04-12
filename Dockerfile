@@ -1,17 +1,13 @@
-FROM python:3.10-slim
+FROM python:3.11-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app.py .
-COPY inference.py .
-COPY openenv.yaml .
-COPY env/ ./env/
-COPY grader/ ./grader/
-COPY agent/ ./agent/
-COPY data/raw/ ./data/raw/
+COPY . .
+
+RUN python generate_data.py
 
 RUN mkdir -p data/processed
 
