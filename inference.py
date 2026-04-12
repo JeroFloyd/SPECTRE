@@ -1,117 +1,161 @@
 from __future__ import annotations
-
-import json
 import os
+from typing import List, Optional
 
 from openai import OpenAI
-
 from env.environment import SpectreEnv
 from agent.baseline_agent import BaselineAgent
 
+# Environment variables (required by hackathon)
 API_BASE_URL = os.getenv("API_BASE_URL", "https://router.huggingface.co/v1")
 MODEL_NAME = os.getenv("MODEL_NAME", "Qwen/Qwen2.5-72B-Instruct")
 API_KEY = os.getenv("HF_TOKEN") or os.getenv("OPENAI_API_KEY")
+BENCHMARK = "spectre"
 TASKS = ["easy", "medium", "hard", "expert"]
 SEED = int(os.getenv("SPECTRE_SEED", "42"))
 
+# Initialize OpenAI client (optional - falls back to baseline agent)
 client = OpenAI(base_url=API_BASE_URL, api_key=API_KEY) if API_KEY else None
 
-SYSTEM_PROMPT = """\
-You are an autonomous agent in S.P.E.C.T.R.E. Complete the data pipeline in as few steps as possible.
 
-PRIMITIVES: parse_data, validate_data, transform_data, aggregate_result, export_result
-
-ACTION TYPES:
-1. {"type": "primitive", "name": "<n>"}
-2. {"type": "create_tool", "name": "<n>", "sequence": ["op1", "op2", ...]}
-3. {"type": "use_tool", "name": "<tool_name>"}
-
-STRATEGY: If you see a repeating pattern in remaining_steps, build a tool for it then invoke it.
-Tools can reference other tools for hierarchical compression.
-
-Expert example (14 ops -> 5 steps):
-  create_tool quad_etl = [etl_batch x4]  ->  use quad_etl  ->  aggregate_result  ->  export_result
-
-Respond with ONLY a valid JSON object.\
-"""
-
-
-def get_llm_action(obs):
-    if client is None:
-        return None
+def safe_score(v: float) -> float:
+    """Ensure score is STRICTLY between 0 and 1 (not 0.0, not 1.0)."""
     try:
-        prompt = (
-            f"Task: {obs['task']} | Next: {obs['next_required_op']} | "
-            f"Remaining: {obs['remaining_steps']} | Tools: {obs['custom_tools_defined']}\n"
-            f"Registry: {json.dumps(obs['tool_registry'], separators=(',', ':'))}\n"
-            f"Choose your next action as a single JSON object."
-        )
-        resp = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "system", "content": SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=200,
-        )
-        text = (resp.choices[0].message.content or "").strip()
-        text = text.replace("```json", "").replace("```", "").strip()
-        return json.loads(text)
-    except Exception:
-        return None
+        v = float(v)
+    except:
+        return 0.5
+    
+    if v <= 0.0:
+        return 0.01
+    if v >= 1.0:
+        return 0.99
+    
+    result = max(0.01, min(0.99, v))
+    
+    # Paranoid check
+    if result <= 0.0 or result >= 1.0:
+        return 0.5
+    
+    return result
 
 
-def _safe(v):
-    v = float(v)
-    if v <= 0.0: return 0.01
-    if v >= 1.0: return 0.99
-    return min(0.99, max(0.01, v))
+def log_start(task: str, env: str, model: str) -> None:
+    """[START] task=<task> env=<benchmark> model=<model>"""
+    print(f"[START] task={task} env={env} model={model}", flush=True)
 
 
-def log_start(task, model):
-    print(f"[START] task={task} env=spectre model={model}", flush=True)
+def log_step(step: int, action: str, reward: float, done: bool, error: Optional[str]) -> None:
+    """[STEP] step=<n> action=<action> reward=<X.XX> done=<true|false> error=<msg|null>"""
+    error_val = error if error else "null"
+    done_val = "true" if done else "false"
+    # Ensure reward is strictly between 0 and 1
+    safe_reward = safe_score(reward)
+    print(
+        f"[STEP] step={step} action={action} reward={safe_reward:.2f} done={done_val} error={error_val}",
+        flush=True,
+    )
 
 
-def log_step(step, action, reward, done, error):
-    print(f"[STEP] step={step} action={json.dumps(action)} reward={_safe(reward):.2f} done={str(done).lower()} error={error or 'null'}", flush=True)
+def log_end(success: bool, steps: int, score: float, rewards: List[float]) -> None:
+    """[END] success=<true|false> steps=<n> score=<X.XXX> rewards=<r1,r2,...>"""
+    success_val = "true" if success else "false"
+    # Ensure all rewards and score are strictly between 0 and 1
+    safe_rewards = [safe_score(r) for r in rewards]
+    safe_final_score = safe_score(score)
+    rewards_str = ",".join(f"{r:.2f}" for r in safe_rewards)
+    print(
+        f"[END] success={success_val} steps={steps} score={safe_final_score:.3f} rewards={rewards_str}",
+        flush=True
+    )
 
 
-def log_end(success, steps, rewards):
-    rewards_str = ",".join(f"{_safe(r):.2f}" for r in rewards)
-    print(f"[END] success={str(success).lower()} steps={steps} rewards={rewards_str}", flush=True)
-
-
-
-def run_task(task_name):
-    env = SpectreEnv(task=task_name, seed=SEED)
-    fallback = BaselineAgent()
-    obs = env.reset(seed=SEED)
-    done = False
-    rewards = []
-    steps = 0
+def run_task(task_name: str) -> None:
+    """Run a single SPECTRE task and log results in OpenEnv format."""
+    env = SpectreEnv(task=task_name, seed=SEED, batch_file="orders_1.csv")
+    agent = BaselineAgent()
+    
+    rewards: List[float] = []
+    steps_taken = 0
     success = False
-
-    log_start(task=task_name, model=MODEL_NAME)
-
+    
+    log_start(task=task_name, env=BENCHMARK, model=MODEL_NAME)
+    
     try:
-        while not done and steps < env.max_steps:
-            steps += 1
-            try:
-                action = get_llm_action(obs) if client else None
-                if action is None:
-                    action = fallback.act(obs)
-                obs, reward, done, info = env.step(action)
-                rewards.append(reward)
-                log_step(steps, action, reward, done, info.get("error"))
-            except Exception as exc:
-                log_step(steps, {"error": str(exc)}, 0.01, True, str(exc))
-                done = True
+        obs = env.reset(seed=SEED)
+        done = False
+        
+        while not done and steps_taken < env.max_steps:
+            # Get action from agent (or could use LLM here)
+            action = agent.act(obs)
+            
+            # Execute step
+            obs, reward, done, info = env.step(action)
+            steps_taken += 1
+            
+            # Format action for logging
+            action_type = action.get("type", "unknown")
+            action_name = action.get("name", "")
+            if action_type == "primitive":
+                action_str = f"primitive({action_name})"
+            elif action_type == "create_tool":
+                action_str = f"create_tool({action_name})"
+            elif action_type == "use_tool":
+                action_str = f"use_tool({action_name})"
+            else:
+                action_str = str(action)
+            
+            error = info.get("error")
+            rewards.append(reward)
+            
+            log_step(
+                step=steps_taken,
+                action=action_str,
+                reward=reward,
+                done=done,
+                error=error
+            )
+            
+            if done:
+                break
+        
+        # Calculate final score
+        total_reward = sum(rewards)
+        # Normalize score to [0, 1] based on task difficulty
+        max_possible = len(env.target_sequence) * 0.1  # rough estimate
+        score = total_reward / max(max_possible, 1.0) if max_possible > 0 else 0.0
+        score = safe_score(score)
+        
+        # Success criteria
         success = obs["progress"] >= obs["target_length"]
-    except Exception:
+        
+    except Exception as e:
+        print(f"[DEBUG] Task failed: {e}", flush=True)
         success = False
+        score = 0.01  # Minimum safe score
+        if not rewards:
+            rewards = [0.01]
+    
     finally:
-        log_end(success=success, steps=steps, rewards=rewards)
+        log_end(
+            success=success,
+            steps=steps_taken,
+            score=score,
+            rewards=rewards
+        )
+
+
+def main() -> None:
+    """Run all SPECTRE tasks."""
+    for task in TASKS:
+        try:
+            run_task(task)
+            print()  # Blank line between tasks
+        except Exception as e:
+            print(f"[ERROR] Task {task} crashed: {e}", flush=True)
+            # Still log END for failed task
+            log_end(success=False, steps=0, score=0.01, rewards=[0.01])
+            print()
 
 
 if __name__ == "__main__":
-    for task in TASKS:
-        run_task(task)
-        print()
+    main()
