@@ -4,13 +4,8 @@ import argparse
 import json
 from pathlib import Path
 
-OPTIMAL_STEPS = {
-    "easy":   4,
-    "medium": 3,
-    "hard":   4,
-}
-
-PASSING_QUALITY    = 0.70
+OPTIMAL_STEPS = {"easy": 3, "medium": 3, "hard": 5, "expert": 7}
+PASSING_QUALITY = 0.70
 PASSING_EFFICIENCY = 0.50
 
 
@@ -23,140 +18,60 @@ def _safe(v: float) -> float:
     return min(0.99, max(0.01, v))
 
 
-def grade_episode(
-    task:             str,
-    step_log:         list[dict],
-    final_obs:        dict,
-    total_reward:     float,
-    pipeline_summary: dict,
-) -> dict:
-    steps_taken   = final_obs["step_count"]
-    progress      = final_obs["progress"]
+def grade_episode(task, step_log, final_obs, total_reward, pipeline_summary):
+    steps_taken = final_obs["step_count"]
+    progress = final_obs["progress"]
     target_length = final_obs["target_length"]
-    optimal       = OPTIMAL_STEPS.get(task, target_length)
+    optimal = OPTIMAL_STEPS.get(task, target_length)
 
-    efficiency    = round(optimal / max(steps_taken, 1), 4)
-    compression   = final_obs.get("compression_ratio", 0.0)
+    efficiency = optimal / max(steps_taken, 1)
+    compression = final_obs.get("compression_ratio", 0.0)
     quality_score = pipeline_summary.get("quality_score", 0.0)
+    has_aggregate = bool(pipeline_summary.get("aggregate", {}).get("total_batches", 0))
 
-    success = (
-        progress >= target_length and
-        quality_score >= PASSING_QUALITY
-    )
+    has_export = any(s["action"].get("name") == "export_result" for s in step_log)
+    success = progress >= target_length and (not has_export or quality_score >= PASSING_QUALITY)
 
-    output_hash = pipeline_summary.get("output_hash", "")
     output_path = pipeline_summary.get("output_path", "")
-
     output_verified = False
     if output_path:
         p = Path(output_path)
         output_verified = (
-            p.exists()
-            and p.stat().st_size > 0
-            and quality_score >= PASSING_QUALITY
-            and pipeline_summary.get("rows_exported", 0) > 0
+            p.exists() and p.stat().st_size > 0 and
+            quality_score >= PASSING_QUALITY and
+            pipeline_summary.get("rows_exported", 0) > 0
         )
 
     if not success:
-        verdict = "FAIL — incomplete or low-quality output"
+        verdict = "FAIL — incomplete pipeline"
     elif efficiency < PASSING_EFFICIENCY:
         verdict = "PASS (slow) — completed but inefficient"
+    elif compression > 1.0 and has_aggregate:
+        verdict = "PASS (expert) — hierarchical tools + cross-batch aggregation"
     elif compression > 1.0:
         verdict = "PASS (self-programmed) — efficient tool composition"
     else:
         verdict = "PASS — completed without self-programming"
 
     tool_creates = [s for s in step_log if s["action"].get("type") == "create_tool"]
-    tool_uses    = [s for s in step_log if s["action"].get("type") == "use_tool"]
-    errors       = [s for s in step_log if s.get("info", {}).get("error")]
+    tool_uses = [s for s in step_log if s["action"].get("type") == "use_tool"]
 
-    if task == "hard":
-        cap = 0.98
-    elif task == "medium":
-        cap = 0.95
-    else:
-        cap = 0.84
-
-    score = _safe(min(cap, total_reward))
+    caps = {"easy": 0.84, "medium": 0.92, "hard": 0.96, "expert": 0.98}
+    score = _safe(min(caps.get(task, 0.95), total_reward))
 
     return {
-        "session_id":        final_obs.get("session_id", ""),
-        "task":              task,
-        "success":           success,
-        "score":             score,
-        "efficiency_ratio":  _safe(efficiency),
-        "compression_ratio": _safe(compression),
-        "quality_score":     _safe(quality_score),
-        "output_verified":   output_verified,
-        "output_hash":       output_hash,
-        "verdict":           verdict,
+        "session_id": str(final_obs.get("session_id", "")),
+        "task": str(task),
+        "success": bool(success),
+        "score": float(score),
+        "efficiency_ratio": float(_safe(efficiency)),
+        "compression_ratio": float(_safe(compression)),
+        "quality_score": float(_safe(quality_score)),
+        "output_verified": bool(output_verified),
+        "output_hash": str(pipeline_summary.get("output_hash", "")),
+        "verdict": str(verdict),
+        "has_aggregate": bool(has_aggregate),
+        "optimal_steps": int(optimal),
+        "rows_exported": int(pipeline_summary.get("rows_exported", 0)),
+        "revenue_total": float(pipeline_summary.get("revenue_total", 0.0)),
     }
-
-
-def run_and_grade(
-    task:    str  = "hard",
-    seed:    int  = 42,
-    agent          = None,
-    verbose: bool = True,
-) -> dict:
-    from env.environment      import SpectreEnv
-    from agent.baseline_agent import BaselineAgent
-
-    if agent is None:
-        agent = BaselineAgent()
-
-    env  = SpectreEnv(task=task, seed=seed)
-    obs  = env.reset(seed=seed)
-    done = False
-    total_reward = 0.0
-
-    if verbose:
-        print(f"\n{'='*60}")
-        print(f"  S.P.E.C.T.R.E Grader -- task={task}  seed={seed}")
-        print(f"{'='*60}")
-        print(f"  {obs['task_description']}\n")
-
-    while not done:
-        action = agent.act(obs)
-        obs, reward, done, info = env.step(action)
-        total_reward += reward
-        if verbose:
-            err = f"  ERROR: {info['error']}" if info.get("error") else ""
-            print(f"  Step {obs['step_count']:>2} | {str(action):<70} | r={reward:+.3f}{err}")
-
-    if verbose:
-        ps = env._pipeline.summary()
-        print(f"\n  Progress : {obs['progress']} / {obs['target_length']}")
-        print(f"  Steps    : {obs['step_count']}  (optimal: {OPTIMAL_STEPS.get(task, '?')})")
-        print(f"  Compress : {obs['compression_ratio']:.3f}")
-        print(f"  Revenue  : ${ps['revenue_total']:,.2f}")
-        print(f"  Quality  : {ps['quality_score']:.3f}")
-        print(f"  Exported : {ps['rows_exported']} rows -> {ps['output_path']}")
-
-    report = grade_episode(
-        task             = task,
-        step_log         = env._step_log,
-        final_obs        = obs,
-        total_reward     = total_reward,
-        pipeline_summary = env._pipeline.summary(),
-    )
-    if verbose:
-        print(f"  Score    : {report['score']:.4f}")
-        print(f"\n  Verdict  : {report['verdict']}")
-        print(f"{'='*60}\n")
-
-    return report
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="S.P.E.C.T.R.E Grader")
-    parser.add_argument("--task",  default="hard", choices=["easy", "medium", "hard"])
-    parser.add_argument("--seed",  default=42, type=int)
-    parser.add_argument("--json",  action="store_true")
-    parser.add_argument("--all",   action="store_true")
-    args = parser.parse_args()
-
-    tasks   = ["easy", "medium", "hard"] if args.all else [args.task]
-    reports = [run_and_grade(task=t, seed=args.seed, verbose=not args.json) for t in tasks]
-
-    print(json.dumps(reports if args.all else reports[0], indent=2))
