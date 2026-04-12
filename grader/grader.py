@@ -57,16 +57,22 @@ def grade_episode(task, step_log, final_obs, total_reward, pipeline_summary):
     tool_uses = [s for s in step_log if s["action"].get("type") == "use_tool"]
 
     caps = {"easy": 0.84, "medium": 0.92, "hard": 0.96, "expert": 0.98}
-    score = _safe(min(caps.get(task, 0.95), total_reward))
+    
+    raw_score = min(caps.get(task, 0.95), total_reward)
+    score = max(0.01, min(0.99, raw_score))
+    if score <= 0.0:
+        score = 0.01
+    if score >= 1.0:
+        score = 0.99
 
     return {
         "session_id": str(final_obs.get("session_id", "")),
         "task": str(task),
         "success": bool(success),
-        "score": float(score),
-        "efficiency_ratio": float(_safe(efficiency)),
-        "compression_ratio": float(_safe(compression)),
-        "quality_score": float(_safe(quality_score)),
+        "score": float(score),  # Now guaranteed to be in (0, 1)
+        "efficiency_ratio": float(max(0.01, min(0.99, efficiency))),
+        "compression_ratio": float(max(0.01, min(0.99, compression))),
+        "quality_score": float(max(0.01, min(0.99, quality_score))),
         "output_verified": bool(output_verified),
         "output_hash": str(pipeline_summary.get("output_hash", "")),
         "verdict": str(verdict),
