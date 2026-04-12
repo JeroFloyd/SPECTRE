@@ -1,6 +1,0 @@
-order_id,price,quantity,date,category
-11,500.0,5,2024-03-01,electronics
-12,600.0,2,invalid,fashion
-13,,3,2024-03-03,home
-14,700.0,-1,2024-03-04,electronics
-15,500.0,5,2024-03-01,electronics

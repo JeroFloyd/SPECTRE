@@ -1,6 +1,0 @@
-order_id,customer_id,product,quantity,unit_price,status,order_date,revenue,order_year,order_month
-11,111,laptop,5,1000,completed,2024-03-01,5000,2024,3
-12,112,phone,2,800,completed,2024-03-02,1600,2024,3
-13,113,tablet,3,400,completed,2024-03-03,1200,2024,3
-14,114,monitor,0,300,completed,2024-03-04,0,2024,3
-15,115,headphones,2,150,completed,2024-03-05,300,2024,3
