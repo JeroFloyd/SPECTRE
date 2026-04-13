@@ -52,6 +52,7 @@ This transforms the task from execution → into a **meta-reasoning problem**.
 parse_data
 validate_data
 transform_data
+aggregate_result
 export_result
 ```
 
@@ -90,11 +91,12 @@ This enables:
 
 ## Tasks
 
-| Difficulty | Description                  | Focus                         |
-| ---------- | ---------------------------- | ----------------------------- |
-| 🟢 Easy    | Parse + validate two batches | Correct sequencing            |
-| 🟡 Medium  | Full ETL ×2                  | Tool reuse                    |
-| 🔴 Hard    | Full ETL ×3 + export         | Hierarchical self-programming |
+| Difficulty | Description                          | Focus                         |
+| ---------- | ------------------------------------ | ----------------------------- |
+| 🟢 Easy    | Parse + validate two batches         | Correct sequencing            |
+| 🟡 Medium  | Full ETL ×2                          | Tool reuse                    |
+| 🔴 Hard    | Full ETL ×3 + export                 | Hierarchical self-programming |
+| 🟣 Expert  | Full ETL ×3 + aggregation + export   | Multi-stage abstraction       |
 
 ---
 
